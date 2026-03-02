@@ -1,8 +1,9 @@
 import json
-import os
 import re
-from groq import Groq
+import ollama
 from textwrap import dedent
+
+OLLAMA_MODEL = "mistral"
 
 EMOJI_PATTERN = re.compile(
     "[\U0001F600-\U0001F64F"
@@ -19,19 +20,17 @@ EMOJI_PATTERN = re.compile(
     flags=re.UNICODE
 )
 
-def make_client():
-    api_key = os.getenv("GROQ_API_KEY")
-    if not api_key:
-        raise ValueError("GROQ_API_KEY not set in .env")
-    return Groq(api_key=api_key)
 
-groq_client = None
-
-def get_groq_client():
-    global groq_client
-    if groq_client is None:
-        groq_client = make_client()
-    return groq_client
+def ollama_chat(system_prompt, user_prompt, temperature=0.2):
+    response = ollama.chat(
+        model=OLLAMA_MODEL,
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user",   "content": user_prompt},
+        ],
+        options={"temperature": temperature},
+    )
+    return response["message"]["content"].strip()
 
 
 def clamp(value, lo=0.0, hi=100.0):
@@ -118,22 +117,15 @@ def compute_metrics(messages, context_snippets=None):
             {{"chaos_score": 0, "toxicity_score": 0, "eloquence_score": 0, "expressiveness_score": 0, "social_score": 0, "consistency_score": 0}}"""    
         ).strip()
 
-    client = get_groq_client()
-    response = client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
-        messages=[
-            {"role": "system", "content": "You are a behavioral analysis AI. You only respond with raw JSON, no markdown, no explanation."},
-            {"role": "user", "content": prompt}
-        ],
+    raw = ollama_chat(
+        system_prompt="You are a behavioral analysis AI. You only respond with raw JSON, no markdown, no explanation.",
+        user_prompt=prompt,
         temperature=0.2,
-        max_tokens=200,
     )
 
-    raw = response.choices[0].message.content.strip().replace("```json", "").replace("```", "").strip()
-    try:
-        scores = json.loads(raw)
-    except json.JSONDecodeError as e:
-        raise ValueError(f"Groq returned invalid JSON: {e}\nRaw response: {raw[:200]}") from e
+    raw = raw.replace("```json", "").replace("```", "").strip()
+    scores = json.loads(raw)
+
     avg_len, lex_div, upper_ratio, emoji_per_msg = compute_raw_stats(messages)
 
     return {
@@ -193,18 +185,16 @@ def generate_roast(username, context_snippets, metrics, archetype):
             Start immediately, no preamble."""
         ).strip()
 
-    client = get_groq_client()
     try:
-        response = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
-            messages=[
-                {"role": "system", "content": "You are Dr. Unhinged, a chaotic but accurate Discord behavioral analyst. You roast people based on real conversational data. You are funny, specific, contextually aware, and ruthless but never genuinely cruel."},
-                {"role": "user", "content": prompt}
-            ],
+        return ollama_chat(
+            system_prompt=(
+                "You are Dr. Unhinged, a chaotic but accurate Discord behavioral analyst. "
+                "You roast people based on real conversational data. "
+                "You are funny, specific, contextually aware, and ruthless but never genuinely cruel."
+            ),
+            user_prompt=prompt,
             temperature=1.2,
-            max_tokens=512,
         )
-        return response.choices[0].message.content.strip()
     except Exception as e:
         return (
             f"_(Dr. Unhinged tried to roast {username} but something went wrong: `{e}`)_\n\n"

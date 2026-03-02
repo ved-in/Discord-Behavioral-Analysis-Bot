@@ -128,7 +128,7 @@ def build_profile_embed(target, metrics, archetype, message_count):
         f"**Emojis/msg** `{metrics['raw_emoji_per_message']:.2f}`"
     ), inline=True)
     embed.add_field(name="🏷️ Traits", value="\n".join(f"▸ {t}" for t in archetype["traits"]), inline=True)
-    embed.set_footer(text="Behavioral Analysis Engine • powered by Groq")
+    embed.set_footer(text="Behavioral Analysis Engine • powered by Ollama (llama3.2)")
     return embed
 
 
@@ -160,7 +160,7 @@ def build_comparison_embed(user1, metrics1, archetype1, user2, metrics2, archety
             value=f"**{archetype['name']}**\n" + "\n".join(f"▸ {t}" for t in archetype["traits"]),
             inline=True
         )
-    embed.set_footer(text="Behavioral Analysis Engine • powered by Groq")
+    embed.set_footer(text="Behavioral Analysis Engine • powered by Ollama (llama3.2)")
     return embed
 
 
