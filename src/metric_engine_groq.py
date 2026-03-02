@@ -1,9 +1,17 @@
 import json
+import os
 import re
-import ollama
+from groq import Groq
 from textwrap import dedent
 
-OLLAMA_MODEL = "mistral"
+GROQ_MODEL = "llama-3.3-70b-versatile"
+_client = None
+
+def get_client():
+    global  client
+    if  client is None:
+         client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+    return  client
 
 EMOJI_PATTERN = re.compile(
     "[\U0001F600-\U0001F64F"
@@ -22,18 +30,21 @@ EMOJI_PATTERN = re.compile(
 
 
 def ollama_chat(system_prompt, user_prompt, temperature=0.2):
-    response = ollama.chat(
-        model=OLLAMA_MODEL,
+    """Named ollama_chat for drop-in compatibility but uses Groq under the hood."""
+    response = get_client().chat.completions.create(
+        model=GROQ_MODEL,
         messages=[
             {"role": "system", "content": system_prompt},
             {"role": "user",   "content": user_prompt},
         ],
-        options={"temperature": temperature},
+        temperature=min(temperature, 1.0),  # Groq caps at 1.0
+        max_tokens=1024,
     )
-    return response["message"]["content"].strip()
+    return response.choices[0].message.content.strip()
 
 
 def extract_json(raw: str) -> dict:
+    """Try multiple strategies to extract a JSON object from a model response."""
     cleaned = raw.replace("```json", "").replace("```", "").strip()
 
     try:

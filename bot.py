@@ -4,7 +4,7 @@ import os
 from discord import app_commands
 from dotenv import load_dotenv
 
-from src.metric_engine import compute_metrics, generate_roast
+from src.metric_engine import analyze_and_roast, compute_metrics
 from src.archetype_classifier import classify
 from src.radar_chart import generate_chart, generate_comparison_chart
 
@@ -18,51 +18,57 @@ bot = discord.Client(intents=intents)
 tree = app_commands.CommandTree(bot)
 
 MIN_MESSAGES = 10
-CONTEXT_WINDOW = 5
 
 
-async def collect_messages(channel, target, limit=100):
+async def collect_messages(channel, target, limit=150):
     raw = []
-    async for msg in channel.history(limit=limit*10):
+    id_to_index = {}
+
+    async for msg in channel.history(limit=limit * 5):
         if msg.content.strip() and not msg.author.bot:
             raw.append(msg)
+
     raw.reverse()
 
+    raw = raw[-limit:]
+    for i, msg in enumerate(raw, start=1):
+        id_to_index[msg.id] = i
+
     messages = []
-    context_snippets = []
-    i = 0
-    while i < len(raw) and len(messages) < limit:
-        msg = raw[i]
-        if msg.author.id != target.id:
-            i += 1
-            continue
+    for msg in raw:
+        if msg.author.id == target.id:
+            messages.append(msg.content)
 
-        run_start = i
-        run = []
-        while i < len(raw) and raw[i].author.id == target.id:
-            run.append(raw[i])
-            i += 1
+    lines = []
+    for i, msg in enumerate(raw, start=1):
+        timestamp = msg.created_at.strftime("%m-%d %H:%M")
 
-        preceding = raw[max(0, run_start-CONTEXT_WINDOW):run_start]
+        if msg.author.id == target.id:
+            prefix = ">>>"
+        else:
+            prefix = "   "
 
-        snippet = ""
-        for m in preceding:
-            snippet += f"  [{m.author.display_name}]: {m.content}\n"
-        for m in run:
-            snippet += f">>> [{target.display_name}]: {m.content}\n"
-        snippet = snippet.strip()
+        reply_part = ""
+        if msg.reference and msg.reference.message_id in id_to_index:
+            replied_to_index = id_to_index[msg.reference.message_id]
+            reply_part = f" [re:{replied_to_index}]"
 
-        context_snippets.append(snippet)
+        content = msg.content
+        if len(content) > 120:
+            content = content[:120] + "…"
 
-        for m in run:
-            messages.append(m.content)
-            if len(messages) >= limit:
-                break
+        line = f"{prefix}[{i}]{reply_part} {timestamp} {msg.author.display_name}: {content}"
+        lines.append(line)
 
-    return messages, context_snippets
+    context = {
+        "log": "\n".join(lines),
+        "target": target.display_name,
+    }
+
+    return messages, context
 
 
-async def collect_all_messages(channel, limit=500):
+async def collect_all_messages(channel, limit=300):
     user_messages = {}
     async for msg in channel.history(limit=limit):
         if not msg.content.strip() or msg.author.bot:
@@ -74,7 +80,7 @@ async def collect_all_messages(channel, limit=500):
     return user_messages
 
 
-async def analyze_member(channel, member, limit=100):
+async def analyze_member(channel, member, limit=150):
     messages, context = await collect_messages(channel, member, limit)
 
     if len(messages) < MIN_MESSAGES:
@@ -90,6 +96,21 @@ async def analyze_member(channel, member, limit=100):
         "archetype": archetype
     }
 
+async def analyze_member_with_roast(channel, member, limit=150):
+    messages, context = await collect_messages(channel, member, limit)
+
+    if len(messages) < MIN_MESSAGES:
+        return None
+    result = await asyncio.to_thread(analyze_and_roast, messages, context)
+    archetype = classify(result["metrics"])
+
+    return {
+        "messages": messages,
+        "context": context,
+        "metrics": result["metrics"],
+        "roast": result["roast"],
+        "archetype": archetype,
+    }
 
 def score_line(label, value, width=12):
     filled = round((value / 100) * width)
@@ -171,11 +192,11 @@ async def on_ready():
 
 
 @tree.command(name="analyze", description="Run a behavioral analysis on a user.")
-async def analyze(interaction: discord.Interaction, user: discord.Member = None, limit: int = 100):
+async def analyze(interaction: discord.Interaction, user: discord.Member = None, limit: int = 150):
     await interaction.response.defer(thinking=True)
 
     target = user or interaction.user
-    limit = max(20, min(500, limit))
+    limit = max(20, min(300, limit))
 
     result = await analyze_member(interaction.channel, target, limit)
 
@@ -194,8 +215,10 @@ async def analyze(interaction: discord.Interaction, user: discord.Member = None,
     embed = build_profile_embed(target, metrics, archetype, len(messages))
     file = discord.File(chart_path, filename="profile.png")
     embed.set_image(url="attachment://profile.png")
-    await interaction.followup.send(embed=embed, file=file)
-    os.remove(chart_path)
+    try:
+        await interaction.followup.send(embed=embed, file=file)
+    finally:
+        os.remove(chart_path)
 
 
 @tree.command(name="roast", description="Get roasted based on your behavior.")
@@ -204,7 +227,7 @@ async def roast(interaction: discord.Interaction, user: discord.Member = None):
 
     target = user or interaction.user
 
-    result = await analyze_member(interaction.channel, target)
+    result = await analyze_member_with_roast(interaction.channel, target)
 
     if not result:
         await interaction.followup.send(
@@ -212,24 +235,14 @@ async def roast(interaction: discord.Interaction, user: discord.Member = None):
         )
         return
 
-    metrics = result["metrics"]
     archetype = result["archetype"]
-    context = result["context"]
-
-    roast_text = await asyncio.to_thread(
-        generate_roast,
-        target.display_name,
-        context,
-        metrics,
-        archetype
-    )
+    roast_text = result["roast"]
 
     embed = discord.Embed(
         title=f"{target.display_name} has been analyzed",
         description=roast_text,
         color=archetype["color"]
     )
-
     await interaction.followup.send(embed=embed)
 
 
