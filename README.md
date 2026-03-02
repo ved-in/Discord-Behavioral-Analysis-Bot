@@ -2,7 +2,7 @@
 
 A Discord bot that analyzes how people talk in a server. It looks at someone's messages and figures out their "communication style" - things like how chaotic they are, how toxic, how eloquent, etc. Then it gives them an archetype, a radar chart, and if you want, a roast.
 
-It uses Groq (which runs Llama 3.3 70B) to do the actual analysis, so it's not just counting words - it reads the conversations in context and tries to understand what people actually meant.
+It uses a locally hosted LLM (mistral by default) to do the actual analysis (your data is not saved nor used for training the model), so it's not just counting words - it reads the conversations in context and tries to understand what people actually meant.
 
 ---
 
@@ -49,13 +49,30 @@ Based on those scores it assigns one of 8 archetypes:
 
 - Python 3.10+
 - A Discord bot token
-- A Groq API key (free at [console.groq.com](https://console.groq.com))
+- [Ollama](https://ollama.com) installed and running locally
 
 ### Install dependencies
 
 ```bash
-pip install discord.py groq python-dotenv matplotlib
+pip install discord.py ollama python-dotenv matplotlib
 ```
+
+### Install Ollama
+Download and install Ollama from [ollama.com](https://ollama.com)
+
+Then pull a model (mistral used by default in code):
+```bash
+ollama pull mistral
+```
+
+Make sure Ollama is running before starting the bot:
+```bash
+ollama serve
+```
+
+> You can use any model you want — just update `OLLAMA_MODEL` in `src/metric_engine.py` to match.
+(will add an option to enter model name directly while launching program. l a t e r)
+
 
 ### Environment variables
 
@@ -63,7 +80,6 @@ Create a `.env` file in the root folder:
 
 ```
 DISCORD_TOKEN=your_discord_bot_token_here
-GROQ_API_KEY=your_groq_api_key_here
 ```
 
 ### Discord bot permissions
@@ -92,7 +108,7 @@ The slash commands will sync automatically when the bot comes online. It might t
 ```
 ├── bot.py                  # Main bot file, all the slash commands
 ├── src/
-│   ├── metric_engine.py    # Groq API calls, scoring logic, roast generation
+│   ├── metric_engine.py    # LLM bullshitery (ollama), scoring logic, roast generation
 │   ├── archetype_classifier.py  # Maps scores to archetypes
 │   └── radar_chart.py      # Generates the radar chart images with matplotlib
 ├── .env                    # Your tokens (don't commit this)
@@ -106,4 +122,4 @@ The slash commands will sync automatically when the bot comes online. It might t
 - The bot needs at least **10 messages** (can be changed in bot.py) from a user in the current channel to analyze them. If there aren't enough it'll say so.
 - It only reads messages from the channel where you run the command - it doesn't have access to other channels.
 - Message history and scores are not stored anywhere. Every command re-analyzes from scratch.
-- The leaderboard makes one Groq API call per active user, so it can be slow in busy channels.
+- The leaderboard makes one call per active user, so it can be slow in busy channels.
