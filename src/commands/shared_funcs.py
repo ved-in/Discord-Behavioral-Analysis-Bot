@@ -2,7 +2,7 @@ import asyncio, os
 
 from src.get_vars import get_data
 
-provider, _ = get_data("provider/model")
+provider = get_data("provider")
 if provider == "ollama":
     from src.helpers.metric_engine import analyze_and_roast, compute_metrics
 elif provider == "groq":
