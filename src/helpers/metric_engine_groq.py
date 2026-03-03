@@ -1,9 +1,19 @@
 import json
+import os
 import re
-import ollama
+from groq import Groq
 from textwrap import dedent
+from src.get_vars import get_data
 
-OLLAMA_MODEL = "mistral"
+GROQ_MODEL = get_data("model")
+MAX_CONTEXT = get_data("MAX_CONTEXT_MESSAGES")
+client = None
+
+def get_client():
+    global client
+    if client is None:
+        client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+    return client   
 
 EMOJI_PATTERN = re.compile(
     "[\U0001F600-\U0001F64F"
@@ -22,18 +32,21 @@ EMOJI_PATTERN = re.compile(
 
 
 def ollama_chat(system_prompt, user_prompt, temperature=0.2):
-    response = ollama.chat(
-        model=OLLAMA_MODEL,
+    """Named ollama_chat for drop-in compatibility but uses Groq under the hood."""
+    response = get_client().chat.completions.create(
+        model=GROQ_MODEL,
         messages=[
             {"role": "system", "content": system_prompt},
             {"role": "user",   "content": user_prompt},
         ],
-        options={"temperature": temperature},
+        temperature=min(temperature, 1.0),
+        max_tokens=1024,
     )
-    return response["message"]["content"].strip()
+    return response.choices[0].message.content.strip()
 
 
 def extract_json(raw: str) -> dict:
+    """Try multiple strategies to extract a JSON object from a model response."""
     cleaned = raw.replace("```json", "").replace("```", "").strip()
 
     try:
@@ -121,7 +134,7 @@ def compute_metrics(messages, context=None):
                 {context['log']}"""
         ).strip()
     else:
-        messages_block = "\n".join(f"  - {m}" for m in messages[:60])
+        messages_block = "\n".join(f"  - {m}" for m in messages[:MAX_CONTEXT])
         context_section = f"MESSAGES (showing up to 60):\n{messages_block}"
 
     prompt = dedent(
@@ -185,8 +198,7 @@ def analyze_and_roast(messages, context):
 
             ROAST RULES:
             - Write like a chaotic Gen Z therapist. Lowercase hits harder, ALL CAPS for drama, emojis for emphasis
-            - Use [re:N] reply chains to call out what they were actually responding to
-            - Reference specific message numbers when the burn is good ("bro saw message [42] and responded with...")
+            - When referencing a reply, look up the original message in the log and describe it naturally. Never say "msg [N]" or "[re:N]" in the roast — say what actually happened. e.g. instead of "bro replied to msg [1]" say "bro replied to a simple 'hi' with..."            - Reference specific message numbers when the burn is good ("bro saw message [42] and responded with...")
             - Different timestamps = different days = different topics, don't mix them up
             - Affectionate destruction only — funny, not cruel. 6-10 punchy lines, no intro fluff
 

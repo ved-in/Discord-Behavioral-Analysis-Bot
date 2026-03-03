@@ -1,8 +1,12 @@
 # Discord Behavioral Analysis Bot
 
-A Discord bot that analyzes how people talk in a server. It looks at someone's messages and figures out their "communication style" - things like how chaotic they are, how toxic, how eloquent, etc. Then it gives them an archetype, a radar chart, and if you want, a roast.
+A Discord bot that analyzes how people communicate in a server. It examines a user’s recent messages and builds a behavioral profile across multiple dimensions — chaos, toxicity, eloquence, social behavior, and more. It then assigns an archetype, generates a radar chart, and can optionally produce a roast based on actual conversation context.
 
-It uses a locally hosted LLM (mistral by default) to do the actual analysis (your data is not saved nor used for training the model), so it's not just counting words - it reads the conversations in context and tries to understand what people actually meant.
+By default, it uses a locally hosted LLM through Ollama (Mistral by default). Messages are processed locally and are not stored or used for model training.
+
+For testing purposes, a Groq-powered version is available. If using Groq, ensure that all users in the server have consented, since message data is sent to a third-party API.
+
+Groq would ideally not be used but due to device limitations, for testing we had to use groq.
 
 ---
 
@@ -47,14 +51,23 @@ Based on those scores it assigns one of 8 archetypes:
 
 ### Requirements
 
-- Python 3.10+
-- A Discord bot token
-- [Ollama](https://ollama.com) installed and running locally
+-A Discord bot token
+-Ollama installed and running locally
+or
+-A Groq API key (if using the Groq backend)
 
 ### Install dependencies
 
 ```bash
-pip install discord.py ollama python-dotenv matplotlib
+pip install discord.py python-dotenv matplotlib
+```
+If using ollama:
+```bash
+pip install ollama
+```
+If using groq:
+```bash
+pip install groq
 ```
 
 ### Install Ollama
@@ -70,8 +83,7 @@ Make sure Ollama is running before starting the bot:
 ollama serve
 ```
 
-> You can use any model you want — just update `OLLAMA_MODEL` in `src/metric_engine.py` to match.
-(will add an option to enter model name directly while launching program. l a t e r)
+> You can use any model you want — just update `model` variable in in `config.json` to match.
 
 
 ### Environment variables
@@ -80,7 +92,10 @@ Create a `.env` file in the root folder:
 
 ```
 DISCORD_TOKEN=your_discord_bot_token_here
+GROQ_API_KEY=your_groq_api_key
 ```
+
+`GROQ_API_KEY` is only required if using the Groq backend.
 
 ### Discord bot permissions
 
@@ -106,20 +121,35 @@ The slash commands will sync automatically when the bot comes online. It might t
 ## File structure
 
 ```
-├── bot.py                  # Main bot file, all the slash commands
-├── src/
-│   ├── metric_engine.py    # LLM bullshitery (ollama), scoring logic, roast generation
-│   ├── archetype_classifier.py  # Maps scores to archetypes
-│   └── radar_chart.py      # Generates the radar chart images with matplotlib
-├── .env                    # Your tokens (don't commit this)
-└── README.md
+├── bot.py                    # Entry point, loads slash commands
+├── config.json               # Runtime config (min_messages, provider, model choice, etc.)
+├── get_vars.py               # Environment/config loader
+├── .env                      # Secrets (DO NOT COMMIT)
+├── README.md
+├── LICENSE
+│
+└── src/
+    │
+    ├── commands/             # Slash command implementations
+    │   ├── analyze.py        # /analyze
+    │   ├── compare.py        # /compare
+    │   ├── leaderboard.py    # /leaderboard
+    │   ├── roast.py          # /roast
+    │   └── shared_funs.py    # Shared logic for commands
+    │
+    ├── helpers/              # Core logic layer
+    │   ├── archetype_classifier.py  # Maps metrics → archetype
+    │   ├── bot_instance.py          # Bot creation/setup abstraction
+    │   ├── metric_engine.py         # Local LLM scoring logic
+    │   ├── metric_engine_groq.py    # Groq API scoring logic
+    │   └── radar_chart.py           # Radar chart generation
 ```
 
 ---
 
 ## Notes
 
-- The bot needs at least **10 messages** (can be changed in bot.py) from a user in the current channel to analyze them. If there aren't enough it'll say so.
-- It only reads messages from the channel where you run the command - it doesn't have access to other channels.
+- The bot needs at least **10 messages** (can be changed in `config.json`) from a user in the current channel to analyze them. If there aren't enough it'll say so.
+- It only reads messages from the channel where you run the command 
 - Message history and scores are not stored anywhere. Every command re-analyzes from scratch.
 - The leaderboard makes one call per active user, so it can be slow in busy channels.
