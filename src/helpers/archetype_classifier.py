@@ -1,3 +1,9 @@
+"""
+Archetype classification maps behavioral metrics to user personas.
+Each archetype includes visual (emoji, color) and textual (description, traits) metadata
+for display in Discord embeds and ranking visualizations.
+"""
+
 ARCHETYPES = {
     "chaos_goblin": {
         "name": "The Chaos Goblin",
@@ -59,18 +65,51 @@ ARCHETYPES = {
 
 
 def classify(metrics):
+    """
+    Route metrics to archetype using prioritized decision tree.
+    Order matters: higher-priority classifications (toxic, chaos) check first,
+    avoiding mis-classification of users with mixed signals.
+
+    Thresholds and requirements:
+    - Toxicity only triggers for users with 20+ messages (avoid false positives on small samples)
+    - Philosopher requires high eloquence AND long messages AND 20+ message sample
+    - Lurker requires short messages AND low social engagement
+    - Consistency requires very high stability (>80) AND 20+ messages
+    - Social Butterfly only triggers if no other dominant archetype found
+
+    Fallback to average_enjoyer if no threshold crossed (catch-all for balanced users).
+    """
+    # Priority 1: Toxicity (requires evidence across multiple messages)
     if metrics["toxicity_score"] > 55 and metrics["message_count"] >= 20:
         return ARCHETYPES["toxic_oracle"]
+
+    # Priority 2: Chaos (unpredictability dominates other traits)
     if metrics["chaos_score"] > 35:
         return ARCHETYPES["chaos_goblin"]
-    if metrics["eloquence_score"] > 55 and metrics["raw_avg_message_length"] >= 8 and metrics["message_count"] >= 20:
+
+    # Priority 3: Eloquence (requires reinforcement from message length and sample size)
+    if (
+        metrics["eloquence_score"] > 55
+        and metrics["raw_avg_message_length"] >= 8
+        and metrics["message_count"] >= 20
+    ):
         return ARCHETYPES["philosopher"]
+
+    # Priority 4: Expressiveness (emoji frequency is unambiguous signal)
     if metrics["raw_emoji_per_message"] > 3:
         return ARCHETYPES["emoji_archaeologist"]
+
+    # Priority 5: Brevity + introversion (short AND quiet = lurker)
     if metrics["raw_avg_message_length"] < 5 and metrics["social_score"] < 50:
         return ARCHETYPES["lurker_lord"]
+
+    # Priority 6: Social engagement (requires clear preference for interaction)
     if metrics["social_score"] > 55:
         return ARCHETYPES["social_butterfly"]
+
+    # Priority 7: Consistency (strict threshold, requires sample size)
     if metrics["consistency_score"] > 80 and metrics["message_count"] >= 20:
         return ARCHETYPES["consistent_narrator"]
+
+    # Fallback: no dominant trait
     return ARCHETYPES["average_enjoyer"]
