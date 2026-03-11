@@ -1,10 +1,10 @@
 {
-    "MIN_MESSAGES": 10,
-    "provider": "groq",
-    "model": "llama-3.3-70b-versatile",
+  "MIN_MESSAGES": 10,
+  "provider": "groq",
+  "model": "llama-3.3-70b-versatile",
 
-    "ANALYZE_LIMIT": 150,
-    "LEADERBOARD_USER_LIMIT": 50,
-    "HISTORY_MULTIPLIER": 5,
-    "MAX_CONTEXT_MESSAGES": 60
+  "ANALYZE_LIMIT": 150,
+  "LEADERBOARD_USER_LIMIT": 50,
+  "HISTORY_MULTIPLIER": 5,
+  "MAX_CONTEXT_MESSAGES": 60
 }
