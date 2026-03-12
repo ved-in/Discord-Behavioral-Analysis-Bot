@@ -2,12 +2,6 @@
 
 A Discord bot that analyzes how people communicate in a server. It examines a user’s recent messages and builds a behavioral profile across multiple dimensions — chaos, toxicity, eloquence, social behavior, and more. It then assigns an archetype, generates a radar chart, and can optionally produce a roast based on actual conversation context.
 
-By default, it uses a locally hosted LLM through Ollama (Mistral by default). Messages are processed locally and are not stored or used for model training.
-
-For testing purposes, a Groq-powered version is available. If using Groq, ensure that all users in the server have consented, since message data is sent to a third-party API.
-
-Groq would ideally not be used but due to device limitations, for testing we had to use groq.
-
 ---
 
 ## What it does
@@ -144,6 +138,32 @@ The slash commands will sync automatically when the bot comes online. It might t
     │   ├── metric_engine_groq.py    # Groq API scoring logic
     │   └── radar_chart.py           # Radar chart generation
 ```
+
+---
+
+## Privacy & Data Usage
+
+This bot supports two LLM backends — **Ollama** (local) and **Groq** (cloud API).
+
+### Discord ToS Compliance
+
+Discord does not explicitly allow or ban processing message data through third-party LLMs. The only clear statement in their [Developer Policy](https://support-dev.discord.com/hc/en-us/articles/8563934450327-Discord-Developer-Policy) regarding AI/LLM usage is:
+
+> *"Do not use message content obtained through the APIs to train machine learning or AI models (including large language models) unless express permission is granted by Discord."*
+
+This bot does **not** use any message data for training. Messages are only used for real-time inference (scoring and analysis) and are never stored.
+
+### Groq Data Policy
+
+If using the Groq backend, message data is sent to Groq's API for processing. Per Groq's [Services Agreement](https://console.groq.com/docs/legal/services-agreement):
+
+> *"Groq is not permitted to use Inputs or Outputs for training or fine-tuning any AI Model Services or other models, unless explicitly granted permission or instructed by Customer."*
+
+Groq does not retain inference data by default. If you want a stronger guarantee, you can enable **Zero Data Retention (ZDR)** in your Groq console under Data Controls.
+
+### Ollama (fully local)
+
+If privacy is a concern, use the **Ollama** backend. All processing happens locally on your machine — no data leaves your server.
 
 ---
 
